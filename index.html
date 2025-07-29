@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Electrical Harmonics Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 220px;
+            background-color: #555;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px 10px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -110px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 0.8rem;
+            font-weight: 400;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #3b82f6;
+            cursor: pointer;
+            border-radius: 50%;
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #3b82f6;
+            cursor: pointer;
+            border-radius: 50%;
+        }
+        .status-pass { color: #16a34a; } /* Green */
+        .status-fail { color: #dc2626; } /* Red */
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-900">Electrical Harmonics Simulator</h1>
+            <p class="text-lg text-gray-600 mt-2">Find the most cost-effective solution to meet Philippine Distribution Code standards.</p>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- Left Column: Controls -->
+            <div class="lg:col-span-1 bg-white p-6 rounded-2xl shadow-lg border border-gray-200 flex flex-col space-y-6">
+                <h2 class="text-2xl font-bold border-b pb-3 text-gray-800">Controls</h2>
+                
+                <!-- System Parameters -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-3 text-gray-700">System Parameters</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="voltage" class="block text-sm font-medium text-gray-600">Fundamental Voltage (V)</label>
+                            <input type="number" id="voltage" value="230" class="mt-1 block w-full bg-gray-100 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2">
+                        </div>
+                        <div>
+                            <label for="frequency" class="block text-sm font-medium text-gray-600">Frequency (Hz)</label>
+                            <select id="frequency" class="mt-1 block w-full bg-gray-100 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2">
+                                <option>60</option>
+                                <option>50</option>
+                            </select>
+                        </div>
+                        <div class="tooltip" data-tip="Source impedance causes voltage distortion when harmonic currents flow through it.">
+                            <label for="impedance" class="block text-sm font-medium text-gray-600">Source Impedance (mΩ) ⓘ</label>
+                            <span class="tooltiptext">Source impedance (resistance & inductance of wiring/transformer) causes voltage distortion when harmonic currents flow through it.</span>
+                            <input type="number" id="impedance" value="5" class="mt-1 block w-full bg-gray-100 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add Harmonic Source -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-3 text-gray-700">Add Harmonic Source</h3>
+                    <div class="flex space-x-2">
+                        <select id="sourceType" class="block w-full bg-gray-100 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2">
+                            <option value="smps">SMPS (Computers, TVs)</option>
+                            <option value="vfd">VFD (6-Pulse Motor Drive)</option>
+                            <option value="led">LED Lighting Driver</option>
+                            <option value="hybrid">Hybrid Inverter (Solar)</option>
+                        </select>
+                        <button id="addSourceBtn" class="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 whitespace-nowrap">Add</button>
+                    </div>
+                </div>
+
+                <!-- Harmonic Filtering & Investment -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-3 text-gray-700">Harmonic Filtering & Investment</h3>
+                    <div class="space-y-2">
+                        <label for="filterStrength" class="text-sm font-medium text-gray-600">Filter Strength: <span id="filterStrengthVal" class="font-bold">0</span>%</label>
+                        <input type="range" id="filterStrength" min="0" max="100" value="0" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                    </div>
+                    <div id="correctionDetails" class="mt-4 p-4 border rounded-lg bg-gray-50 shadow-sm">
+                        <h4 class="font-semibold text-gray-800 mb-2">Corrective Action Details</h4>
+                        <p class="text-sm text-gray-600">Est. Investment: <span id="investmentCost" class="font-bold"></span></p>
+                        <p class="text-sm text-gray-600">Resulting THD I: <span id="correctedThdi" class="font-bold"></span></p>
+                        <p class="text-sm text-gray-600">Resulting THD V: <span id="correctedThdv" class="font-bold"></span></p>
+                    </div>
+                </div>
+
+                <!-- Active Sources Container -->
+                <div id="sourcesContainer" class="space-y-4 flex-grow">
+                    <h3 class="text-lg font-semibold text-gray-700">Active Sources</h3>
+                    <!-- Source cards will be injected here -->
+                </div>
+            </div>
+
+            <!-- Right Column: Visualizations & Metrics -->
+            <div class="lg:col-span-2 space-y-8">
+                <!-- Metrics & Compliance -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="grid grid-cols-2 gap-4 text-center">
+                        <div class="bg-white p-4 rounded-2xl shadow-lg border border-gray-200">
+                            <h4 class="text-sm font-semibold text-gray-500 tooltip" data-tip="Total Harmonic Distortion of Current">THD I ⓘ<span class="tooltiptext">Total Harmonic Distortion of the current waveform. A measure of how much the current deviates from a pure sine wave due to harmonics.</span></h4>
+                            <p id="thdi" class="text-2xl font-bold text-red-600">0.0%</p>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl shadow-lg border border-gray-200">
+                            <h4 class="text-sm font-semibold text-gray-500 tooltip" data-tip="Total Harmonic Distortion of Voltage">THD V ⓘ<span class="tooltiptext">Total Harmonic Distortion of the voltage waveform. This distortion is caused by harmonic currents flowing through the system impedance.</span></h4>
+                            <p id="thdv" class="text-2xl font-bold text-orange-500">0.0%</p>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl shadow-lg border border-gray-200">
+                            <h4 class="text-sm font-semibold text-gray-500 tooltip" data-tip="True RMS Current">I rms (A) ⓘ<span class="tooltiptext">The 'true' effective current, including the heating effects of harmonic content. It's higher than the fundamental current alone.</span></h4>
+                            <p id="irms" class="text-2xl font-bold text-gray-700">0.0 A</p>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl shadow-lg border border-gray-200">
+                            <h4 class="text-sm font-semibold text-gray-500 tooltip" data-tip="Crest Factor">Crest Factor ⓘ<span class="tooltiptext">The ratio of the peak value to the RMS value of the waveform. A pure sine wave has a Crest Factor of 1.414. High values indicate 'peaky' currents.</span></h4>
+                            <p id="cf" class="text-2xl font-bold text-gray-700">1.414</p>
+                        </div>
+                    </div>
+                    <div class="bg-white p-4 rounded-2xl shadow-lg border border-gray-200 text-center flex flex-col justify-center">
+                        <h3 class="text-xl font-bold mb-3 text-gray-800">PDC Compliance Status</h3>
+                        <div class="space-y-2">
+                             <p class="text-lg">Voltage THD (&lt;5%): <span id="statusThdv" class="font-bold"></span></p>
+                             <p class="text-lg">Current THD (&lt;5%): <span id="statusThdi" class="font-bold"></span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Waveform Chart -->
+                <div class="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
+                    <h3 class="text-xl font-bold mb-4 text-gray-800">Waveforms</h3>
+                    <div class="chart-container">
+                        <canvas id="waveformChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Harmonic Spectrum Chart -->
+                <div class="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
+                    <h3 class="text-xl font-bold mb-4 text-gray-800">Harmonic Spectrum (Current)</h3>
+                    <div class="chart-container">
+                        <canvas id="spectrumChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <footer class="text-center mt-12 text-gray-500 text-sm">
+            <p>A simulation tool for educational purposes. Cost estimations are approximate. Not for professional system design.</p>
+        </footer>
+
+    </div>
+
+    <script>
+        // --- CONSTANTS & STATE ---
+        const waveformCtx = document.getElementById('waveformChart').getContext('2d');
+        const spectrumCtx = document.getElementById('spectrumChart').getContext('2d');
+        const MAX_HARMONICS = 50;
+        const PDC_LIMITS = { V: 0.05, I: 0.05 }; // 5% limit for Voltage and Current THD
+        const FILTER_COST_PER_AMP = 2500; // Estimated cost in PHP per Ampere for full filtering
+        const MAX_FILTER_REDUCTION = 0.95; // 95% is the max reduction at 100% strength
+
+        let waveformChart, spectrumChart;
+        let sources = [];
+        let sourceIdCounter = 0;
+
+        const HARMONIC_PROFILES = {
+            smps: { 3: 0.75, 5: 0.5, 7: 0.3, 9: 0.2, 11: 0.15, 13: 0.1, 15: 0.08 },
+            vfd: { 5: 0.25, 7: 0.14, 11: 0.09, 13: 0.07, 17: 0.05, 19: 0.04 },
+            led: { 3: 0.8, 5: 0.6, 7: 0.35, 9: 0.2, 11: 0.1, 13: 0.08, 15: 0.05 },
+            hybrid: { 3: 0.15, 5: 0.10, 7: 0.08, 11: 0.05, 13: 0.04 }
+        };
+
+        // --- UI ELEMENT REFERENCES ---
+        const addSourceBtn = document.getElementById('addSourceBtn');
+        const sourcesContainer = document.getElementById('sourcesContainer');
+        const voltageInput = document.getElementById('voltage');
+        const frequencyInput = document.getElementById('frequency');
+        const impedanceInput = document.getElementById('impedance');
+        const filterStrengthSlider = document.getElementById('filterStrength');
+        const filterStrengthVal = document.getElementById('filterStrengthVal');
+
+        // --- EVENT LISTENERS ---
+        addSourceBtn.addEventListener('click', addSource);
+        filterStrengthSlider.addEventListener('input', (e) => {
+            filterStrengthVal.textContent = e.target.value;
+            runSimulation();
+        });
+        [voltageInput, frequencyInput, impedanceInput].forEach(input => {
+            input.addEventListener('change', runSimulation);
+        });
+
+        // --- CORE FUNCTIONS ---
+        
+        function addSource() {
+            const sourceType = document.getElementById('sourceType').value;
+            const sourceName = document.getElementById('sourceType').options[document.getElementById('sourceType').selectedIndex].text;
+            
+            const id = sourceIdCounter++;
+            const newSource = { id: `source-${id}`, type: sourceType, name: sourceName, current: 10 };
+            sources.push(newSource);
+            
+            createSourceCard(newSource);
+            runSimulation();
+        }
+
+        function createSourceCard(source) {
+            const card = document.createElement('div');
+            card.id = source.id;
+            card.className = 'p-4 border rounded-lg bg-gray-50 shadow-sm';
+            card.innerHTML = `
+                <div class="flex justify-between items-center mb-2">
+                    <h4 class="font-semibold text-gray-800">${source.name}</h4>
+                    <button class="text-red-500 hover:text-red-700 font-bold" onclick="removeSource('${source.id}')">✕</button>
+                </div>
+                <label for="${source.id}-current" class="text-sm text-gray-600">Fundamental Current: <span id="${source.id}-val">10</span> A</label>
+                <input type="range" id="${source.id}-current" min="1" max="100" value="10" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+            `;
+            sourcesContainer.appendChild(card);
+
+            const slider = document.getElementById(`${source.id}-current`);
+            slider.addEventListener('input', (e) => {
+                const valSpan = document.getElementById(`${source.id}-val`);
+                const currentVal = parseFloat(e.target.value);
+                valSpan.textContent = currentVal;
+                const sourceToUpdate = sources.find(s => s.id === source.id);
+                sourceToUpdate.current = currentVal;
+                runSimulation();
+            });
+        }
+
+        function removeSource(sourceId) {
+            sources = sources.filter(s => s.id !== sourceId);
+            document.getElementById(sourceId).remove();
+            runSimulation();
+        }
+
+        function runSimulation() {
+            const V_fundamental = parseFloat(voltageInput.value) || 230;
+            const freq = parseFloat(frequencyInput.value) || 60;
+            const Z_source_ohms = (parseFloat(impedanceInput.value) || 0) / 1000;
+            const omega = 2 * Math.PI * freq;
+            const filterStrength = parseFloat(filterStrengthSlider.value) / 100;
+
+            // 1. Aggregate Harmonic Currents
+            let harmonicCurrents = new Array(MAX_HARMONICS + 1).fill(0);
+            let totalFundamentalCurrent = 0;
+
+            sources.forEach(source => {
+                totalFundamentalCurrent += source.current;
+                const profile = HARMONIC_PROFILES[source.type];
+                for (const h in profile) {
+                    harmonicCurrents[h] += source.current * profile[h];
+                }
+            });
+            harmonicCurrents[1] = totalFundamentalCurrent;
+            
+            // Apply filter based on strength
+            const reductionMultiplier = 1.0 - (MAX_FILTER_REDUCTION * filterStrength);
+            for (let h = 2; h <= MAX_HARMONICS; h++) {
+                harmonicCurrents[h] *= reductionMultiplier;
+            }
+            
+            // 2. Calculate Metrics
+            const I_rms_sq = harmonicCurrents.reduce((sum, I_h) => sum + I_h * I_h, 0);
+            const I_rms = Math.sqrt(I_rms_sq);
+            
+            const I_harmonics_rms_sq = I_rms_sq - (harmonicCurrents[1] * harmonicCurrents[1]);
+            const THD_I = harmonicCurrents[1] > 0 ? Math.sqrt(I_harmonics_rms_sq) / harmonicCurrents[1] : 0;
+
+            // 3. Calculate Voltage Distortion
+            let harmonicVoltages = new Array(MAX_HARMONICS + 1).fill(0);
+            harmonicVoltages[1] = V_fundamental;
+            let V_harmonics_rms_sq = 0;
+
+            for (let h = 2; h <= MAX_HARMONICS; h++) {
+                const Z_h = h * Z_source_ohms;
+                const V_h = harmonicCurrents[h] * Z_h;
+                harmonicVoltages[h] = V_h;
+                V_harmonics_rms_sq += V_h * V_h;
+            }
+
+            const THD_V = V_fundamental > 0 ? Math.sqrt(V_harmonics_rms_sq) / V_fundamental : 0;
+            
+            // 4. Generate Waveform Data
+            const points = 256;
+            const time = Array.from({length: points}, (_, i) => i / (points * freq));
+            const idealVoltageWave = time.map(t => V_fundamental * Math.sqrt(2) * Math.sin(omega * t));
+            const distortedCurrentWave = time.map(t => {
+                let val = 0;
+                for (let h = 1; h <= MAX_HARMONICS; h++) {
+                    if (harmonicCurrents[h] > 0) val += harmonicCurrents[h] * Math.sqrt(2) * Math.sin(h * omega * t);
+                }
+                return val;
+            });
+            const distortedVoltageWave = time.map(t => {
+                let val = 0;
+                 for (let h = 1; h <= MAX_HARMONICS; h++) {
+                    if (harmonicVoltages[h] > 0) val += harmonicVoltages[h] * Math.sqrt(2) * Math.sin(h * omega * t);
+                }
+                return val;
+            });
+
+            const I_peak = Math.max(...distortedCurrentWave.map(Math.abs));
+            const CrestFactor = I_rms > 0.01 ? I_peak / I_rms : 1.414;
+
+            // 5. Update UI
+            updateMetrics(THD_I, THD_V, I_rms, CrestFactor);
+            updateComplianceStatus(THD_I, THD_V);
+            updateCorrectionDetails(THD_I, THD_V, totalFundamentalCurrent, filterStrength);
+
+            // 6. Update Charts
+            updateWaveformChart(time.map(t => t*1000), idealVoltageWave, distortedVoltageWave, distortedCurrentWave);
+            updateSpectrumChart(harmonicCurrents);
+        }
+
+        function updateMetrics(thdi, thdv, irms, cf) {
+            document.getElementById('thdi').textContent = (thdi * 100).toFixed(1) + '%';
+            document.getElementById('thdv').textContent = (thdv * 100).toFixed(1) + '%';
+            document.getElementById('irms').textContent = irms.toFixed(1) + ' A';
+            document.getElementById('cf').textContent = cf.toFixed(3);
+        }
+
+        function updateComplianceStatus(thdi, thdv) {
+            const statusThdvEl = document.getElementById('statusThdv');
+            const statusThdiEl = document.getElementById('statusThdi');
+
+            // Voltage Status
+            if (thdv <= PDC_LIMITS.V) {
+                statusThdvEl.textContent = 'PASS';
+                statusThdvEl.className = 'font-bold status-pass';
+            } else {
+                statusThdvEl.textContent = 'FAIL';
+                statusThdvEl.className = 'font-bold status-fail';
+            }
+            // Current Status
+            if (thdi <= PDC_LIMITS.I) {
+                statusThdiEl.textContent = 'PASS';
+                statusThdiEl.className = 'font-bold status-pass';
+            } else {
+                statusThdiEl.textContent = 'FAIL';
+                statusThdiEl.className = 'font-bold status-fail';
+            }
+        }
+        
+        function updateCorrectionDetails(thdi, thdv, fundamentalCurrent, filterStrength) {
+            // Cost is proportional to the total fundamental current and the strength of the filter
+            const cost = fundamentalCurrent * FILTER_COST_PER_AMP * filterStrength;
+            const formatter = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
+
+            document.getElementById('investmentCost').textContent = formatter.format(cost);
+            document.getElementById('correctedThdi').textContent = (thdi * 100).toFixed(1) + '%';
+            document.getElementById('correctedThdv').textContent = (thdv * 100).toFixed(1) + '%';
+        }
+
+        function updateWaveformChart(timeLabels, vIdeal, vDistorted, iDistorted) {
+            const data = {
+                labels: timeLabels,
+                datasets: [
+                    { label: 'Ideal Voltage', data: vIdeal, borderColor: 'rgba(54, 162, 235, 0.5)', borderWidth: 2, pointRadius: 0, tension: 0.1, borderDash: [5, 5] },
+                    { label: 'Distorted Voltage', data: vDistorted, borderColor: 'rgb(255, 159, 64)', borderWidth: 3, pointRadius: 0, tension: 0.1, yAxisID: 'y' },
+                    { label: 'Distorted Current', data: iDistorted, borderColor: 'rgb(255, 99, 132)', borderWidth: 3, pointRadius: 0, tension: 0.1, yAxisID: 'y1' }
+                ]
+            };
+            if (!waveformChart) {
+                waveformChart = new Chart(waveformCtx, { type: 'line', data: data, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 0 }, scales: { x: { title: { display: true, text: 'Time (ms)' }, ticks: { maxTicksLimit: 10 } }, y: { type: 'linear', display: true, position: 'left', title: { display: true, text: 'Voltage (V)' } }, y1: { type: 'linear', display: true, position: 'right', title: { display: true, text: 'Current (A)' }, grid: { drawOnChartArea: false } } }, plugins: { legend: { position: 'top' }, tooltip: { mode: 'index', intersect: false } } } });
+            } else { waveformChart.data = data; waveformChart.update('none'); }
+        }
+
+        function updateSpectrumChart(harmonicCurrents) {
+            const labels = Array.from({length: (MAX_HARMONICS-1)/2}, (_, i) => `H${i*2 + 3}`);
+            const dataPoints = Array.from({length: (MAX_HARMONICS-1)/2}, (_, i) => harmonicCurrents[i*2 + 3]);
+            const data = { labels: labels, datasets: [{ label: 'Harmonic Current (A)', data: dataPoints, backgroundColor: 'rgba(255, 99, 132, 0.5)', borderColor: 'rgb(255, 99, 132)', borderWidth: 1 }] };
+            if (!spectrumChart) {
+                spectrumChart = new Chart(spectrumCtx, { type: 'bar', data: data, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 0 }, scales: { y: { beginAtZero: true, title: { display: true, text: 'Current (A)' } }, x: { title: { display: true, text: 'Harmonic Order' } } }, plugins: { legend: { display: false } } } });
+            } else { spectrumChart.data = data; spectrumChart.update('none'); }
+        }
+
+        // --- INITIAL RUN ---
+        window.onload = () => { addSource(); };
+    </script>
+
+</body>
+</html>
