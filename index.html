@@ -420,7 +420,9 @@
             const kFactor = I_rms > 0 ? (totalFundamentalCurrent*totalFundamentalCurrent + harmonicCurrentMagnitudes.reduce((sum, I_h, h) => sum + I_h*I_h * h*h, 0)) / (I_rms*I_rms) : 1;
             const investmentCost = totalFundamentalCurrent * FILTER_COST_PER_AMP * filterStrength;
 
-            lastResults = { V_fundamental, Z_source_ohms, baseLinearLoad, filterStrength, sources: JSON.parse(JSON.stringify(sources)), THD_I, THD_V, I_rms, TPF, I_neutral, kFactor, investmentCost, totalFundamentalCurrent };
+            const isCompliant = THD_I <= PDC_LIMITS.I && THD_V <= PDC_LIMITS.V;
+
+            lastResults = { V_fundamental, Z_source_ohms, baseLinearLoad, filterStrength, sources: JSON.parse(JSON.stringify(sources)), THD_I, THD_V, I_rms, TPF, I_neutral, kFactor, investmentCost, totalFundamentalCurrent, isCompliant };
             
             updateUI(lastResults);
             updateCharts(harmonicCurrentMagnitudes, V_fundamental, totalFundamentalCurrent);
@@ -440,7 +442,7 @@
             const kFactorEl = document.getElementById('kFactor');
             kFactorEl.textContent = `K-${Math.ceil(r.kFactor > 1 ? r.kFactor : 1)}`;
             kFactorEl.classList.toggle('risk-warning', r.kFactor > 4);
-            updateFilterRecommendation(r.totalFundamentalCurrent);
+            updateFilterRecommendation(r.totalFundamentalCurrent, r.isCompliant);
         }
 
         function updateComplianceStatus(thdi, thdv) {
@@ -452,34 +454,50 @@
             statusThdiEl.className = `font-bold ${thdi <= PDC_LIMITS.I ? 'status-pass' : 'status-fail'}`;
         }
 
-        function updateFilterRecommendation(requiredAmps) {
+        function updateFilterRecommendation(requiredAmps, isCompliant) {
             const formatterUSD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
             const formatterPHP = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
             
-            let recommendedFilter = null;
-            for(const filter of FILTER_CATALOG) {
-                if (filter.amps >= requiredAmps) {
-                    recommendedFilter = filter;
-                    break;
+            filterTableBody.innerHTML = ''; // Clear the table first
+
+            if (!isCompliant) {
+                let recommendedFilter = null;
+                for(const filter of FILTER_CATALOG) {
+                    if (filter.amps >= requiredAmps) {
+                        recommendedFilter = filter;
+                        break;
+                    }
                 }
-            }
-            
-            filterTableBody.innerHTML = '';
-            FILTER_CATALOG.forEach(filter => {
-                const isRecommended = recommendedFilter && filter.model === recommendedFilter.model;
+                
+                FILTER_CATALOG.forEach(filter => {
+                    const isRecommended = recommendedFilter && filter.model === recommendedFilter.model;
+                    const row = document.createElement('tr');
+                    if (isRecommended) {
+                        row.className = 'recommended-row';
+                    }
+                    row.innerHTML = `
+                        <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${filter.brand}</td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${filter.model} ${isRecommended ? '<span class="ml-2 text-xs font-bold text-blue-800 bg-blue-200 px-2 py-1 rounded-full">Best Match</span>' : ''}</td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${filter.amps}A, ${filter.volts}V</td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${formatterUSD.format(filter.priceUSD)}</td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${formatterPHP.format(filter.priceUSD * USD_TO_PHP_RATE)}</td>
+                    `;
+                    filterTableBody.appendChild(row);
+                });
+            } else {
                 const row = document.createElement('tr');
-                if (isRecommended) {
-                    row.className = 'recommended-row';
-                }
                 row.innerHTML = `
-                    <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${filter.brand}</td>
-                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${filter.model} ${isRecommended ? '<span class="ml-2 text-xs font-bold text-blue-800 bg-blue-200 px-2 py-1 rounded-full">Best Match</span>' : ''}</td>
-                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${filter.amps}A, ${filter.volts}V</td>
-                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${formatterUSD.format(filter.priceUSD)}</td>
-                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${formatterPHP.format(filter.priceUSD * USD_TO_PHP_RATE)}</td>
+                    <td colspan="5" class="px-4 py-4 text-center text-sm text-gray-500">
+                        <div class="flex items-center justify-center">
+                            <svg class="w-5 h-5 text-green-500 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                            </svg>
+                            <span>System is compliant with PDC standards. No harmonic filter required.</span>
+                        </div>
+                    </td>
                 `;
                 filterTableBody.appendChild(row);
-            });
+            }
         }
         
         function updateCharts(harmonicCurrentMagnitudes, V_fundamental, totalFundamentalCurrent) {
